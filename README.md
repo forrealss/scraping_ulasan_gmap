@@ -64,7 +64,7 @@ MAX_REVIEWS=100
 ## 🎯 Menjalankan
 
 ```bash
-python src/main.py
+python run.py
 ```
 
 ### Output
@@ -93,12 +93,20 @@ ayu nurcahya,3.0,sebulan lalu,"Another review...",https://lh3.googleusercontent.
 
 ## 🏗️ Struktur Kode
 
-### Core Classes
+### 📁 File Structure
+- **`run.py`**: Main entry point untuk menjalankan scraper
+- **`src/models.py`**: Review dataclass untuk struktur data
+- **`src/scraper.py`**: Main GMapReviewScraper class dengan OOP approach
+- **`src/writer.py`**: ReviewWriter class untuk CSV operations
+- **`src/utils.py`**: Helper functions untuk text/attribute extraction
+- **`src/__init__.py`**: Package initialization
+
+### 🔧 Core Classes
 - **`GMapReviewScraper`**: Main scraper class dengan OOP approach
 - **`Review`**: Dataclass untuk struktur data review
 - **`ReviewWriter`**: Class untuk menulis data ke CSV
 
-### Key Methods
+### ⚡ Key Methods
 - **`scrape()`**: Main method untuk memulai scraping
 - **`_scroll_and_collect_reviews()`**: Auto-scroll dengan real-time saving
 - **`_get_author_image_url()`**: Extract image URL dari review container
@@ -126,7 +134,13 @@ ayu nurcahya,3.0,sebulan lalu,"Another review...",https://lh3.googleusercontent.
 ```
 scrap_ulasan_gmap/
 ├── src/
-│   └── main.py              # Main scraper code
+│   ├── __init__.py          # Package initialization
+│   ├── models.py            # Review dataclass
+│   ├── scraper.py           # Main scraper class
+│   ├── utils.py             # Helper functions
+│   ├── writer.py            # CSV writer class
+│   └── main.py              # Legacy entry point
+├── run.py                   # Main entry point
 ├── data/
 │   └── reviews.csv          # Output file
 ├── .env                     # Configuration (not tracked)

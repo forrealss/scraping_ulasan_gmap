@@ -1,7 +1,19 @@
-import os
-from dotenv import load_dotenv
+#!/usr/bin/env python3
+"""
+Google Maps Review Scraper - Main Entry Point
 
-from .scraper import GMapReviewScraper
+Run this file to start the scraper:
+python run.py
+"""
+
+import os
+import sys
+
+# Add src to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from dotenv import load_dotenv
+from scraper import GMapReviewScraper
 
 
 def main() -> None:
@@ -35,4 +47,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main() 
