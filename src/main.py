@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-from .scraper import GMapReviewScraper
+from scraper import GMapReviewScraper
 
 
 def main() -> None:

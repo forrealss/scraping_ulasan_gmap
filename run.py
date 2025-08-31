@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Google Maps Review Scraper - Main Entry Point
-
-Run this file to start the scraper:
-python run.py
-"""
-
 import os
 import sys
 
