@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+"""
+Google Maps Review Scraper - Main Entry Point
+
+Run this file to start the scraper:
+python run.py
+"""
+
 import os
 import sys
 
@@ -12,7 +20,7 @@ def main() -> None:
     """Main entry point for the Google Maps review scraper"""
     # Load environment variables
     load_dotenv()
-    
+
     # Get configuration from environment
     place_url = os.getenv("GMAP_PLACE_URL", "").strip()
     if not place_url:
@@ -27,15 +35,21 @@ def main() -> None:
     headless_env = os.getenv("HEADLESS", "true").strip().lower()
     headless = headless_env not in {"false", "0", "no"}
 
+    # Get output filename from environment
+    output_filename = os.getenv("OUTPUT_FILENAME", "reviews.csv").strip()
+    if not output_filename.endswith('.csv'):
+        output_filename += '.csv'
+
     # Create scraper instance and start scraping
     scraper = GMapReviewScraper(
-        place_url=place_url, 
-        headless=headless, 
-        max_reviews=max_reviews
+        place_url=place_url,
+        headless=headless,
+        max_reviews=max_reviews,
+        output_filename=output_filename
     )
-    
+
     reviews = scraper.scrape()
-    print(f"Scraped {len(reviews)} reviews → data/reviews.csv")
+    print(f"Scraped {len(reviews)} reviews → data/{output_filename}")
 
 
 if __name__ == "__main__":

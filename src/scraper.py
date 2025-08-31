@@ -17,10 +17,11 @@ from utils import safe_get_text, safe_get_attr, extract_rating, get_author_image
 class GMapReviewScraper:
     """Main class untuk scraping review Google Maps"""
     
-    def __init__(self, place_url: str, headless: bool = True, max_reviews: int = 100):
+    def __init__(self, place_url: str, headless: bool = True, max_reviews: int = 100, output_filename: str = "reviews.csv"):
         self.place_url = place_url
         self.headless = headless
         self.max_reviews = max_reviews
+        self.output_filename = output_filename
         self.driver: Optional[webdriver.Chrome] = None
         self.wait: Optional[WebDriverWait] = None
 
@@ -404,7 +405,7 @@ class GMapReviewScraper:
             return self._scroll_page_and_collect_reviews()
 
         # Initialize CSV writer for real-time saving
-        writer = ReviewWriter(output_dir="data", output_filename="reviews.csv")
+        writer = ReviewWriter(output_dir="data", output_filename=self.output_filename)
         all_reviews = []
         processed_review_ids = set()
         last_height = 0
@@ -465,7 +466,7 @@ class GMapReviewScraper:
         processed_review_ids = set()
         
         # Initialize CSV writer for real-time saving
-        writer = ReviewWriter(output_dir="data", output_filename="reviews.csv")
+        writer = ReviewWriter(output_dir="data", output_filename=self.output_filename)
         
         while scroll_count < 50:  # Max 50 page scrolls
             # Parse and collect new reviews from current page

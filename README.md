@@ -52,6 +52,9 @@ HEADLESS=true
 
 # Jumlah maksimal review yang diambil (opsional, default: 1000)
 MAX_REVIEWS=200
+
+# Nama file output CSV (opsional, default: reviews.csv)
+OUTPUT_FILENAME="mie_gacoan_reviews.csv"
 ```
 
 ### File .env.example
@@ -59,6 +62,7 @@ MAX_REVIEWS=200
 GMAP_PLACE_URL="https://www.google.com/maps/place/Mie+Gacoan+Jember+-+PB+Sudirman/@-8.1631036,113.7068003,17z/"
 HEADLESS=false
 MAX_REVIEWS=100
+OUTPUT_FILENAME="reviews.csv"
 ```
 
 ## Menjalankan
