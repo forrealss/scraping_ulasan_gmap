@@ -7,8 +7,8 @@ Proyek ini melakukan scraping ulasan (reviews) dari sebuah lokasi/toko di Google
 - Scraping Review Lengkap: Nama reviewer, rating, tanggal, teks review
 - Image URL Profil: Mengekstrak URL foto profil reviewer dari Google
 - Real-time CSV Export: Menyimpan data secara real-time per scroll
-- Auto-scroll: Otomatis scroll untuk load semua review
-- Configurable: Limit review, headless mode, URL via .env
+- Multiple Scroll Modes: Auto, Manual, dan Hybrid scroll modes
+- Configurable: Limit review, headless mode, scroll mode via .env
 - Robust: Multiple fallback strategies untuk berbagai UI Google Maps
 
 ## Persyaratan
@@ -20,12 +20,14 @@ Proyek ini melakukan scraping ulasan (reviews) dari sebuah lokasi/toko di Google
 ## Instalasi
 
 1. Clone repository
+
 ```bash
 git clone <repository-url>
 cd scrap_ulasan_gmap
 ```
 
 2. Buat virtualenv (opsional namun disarankan)
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
@@ -34,6 +36,7 @@ source .venv/bin/activate  # Linux/Mac
 ```
 
 3. Install dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -41,6 +44,7 @@ pip install -r requirements.txt
 ## Konfigurasi
 
 ### File .env
+
 Buat file .env di root proyek dengan variabel berikut:
 
 ```env
@@ -55,14 +59,20 @@ MAX_REVIEWS=200
 
 # Nama file output CSV (opsional, default: reviews.csv)
 OUTPUT_FILENAME="mie_gacoan_reviews.csv"
+
+# Mode auto scroll (opsional, default: true)
+# true = full auto scroll, false = manual control, hybrid = auto scroll + manual scrape
+AUTO_SCROLL=true
 ```
 
 ### File .env.example
+
 ```env
 GMAP_PLACE_URL="https://www.google.com/maps/place/Mie+Gacoan+Jember+-+PB+Sudirman/@-8.1631036,113.7068003,17z/"
 HEADLESS=false
 MAX_REVIEWS=100
 OUTPUT_FILENAME="reviews.csv"
+AUTO_SCROLL=hybrid
 ```
 
 ## Menjalankan
@@ -71,13 +81,40 @@ OUTPUT_FILENAME="reviews.csv"
 python run.py
 ```
 
+## Scroll Modes
+
+Scraper ini mendukung 3 mode scrolling yang berbeda:
+
+### AUTO_SCROLL=true (Full Auto)
+
+- Mode default, sepenuhnya otomatis
+- Script akan scroll dan scrape secara otomatis
+- Paling cepat dan efisien untuk jumlah review banyak
+
+### AUTO_SCROLL=false (Manual Control)
+
+- Kontrol penuh oleh user
+- Browser terbuka, user scroll manual untuk load review
+- User kembali ke terminal dan pilih "1" untuk mulai scrape
+- User dapat ulangi proses scroll manual + scrape berkali-kali
+- Cocok untuk review sedikit atau kontrol presisi
+
+### AUTO_SCROLL=hybrid (Auto Scroll + Manual Scrape)
+
+- Kombinasi auto scroll dan manual control
+- Phase 1: Script auto-scroll sampai mencapai MAX_REVIEWS atau habis
+- Phase 2: User diminta konfirmasi untuk mulai scraping
+- Efisien untuk load banyak review tapi tetap ada kontrol
+
 ### Output
+
 - File CSV: data/reviews.csv
 - Kolom data: author_name, rating, published_at, text, author_image_url
 
 ## Struktur Data
 
 ### Review Object
+
 ```python
 @dataclass
 class Review:
@@ -89,6 +126,7 @@ class Review:
 ```
 
 ### Contoh Output CSV
+
 ```csv
 author_name,rating,published_at,text,author_image_url
 anantha pratama,1.0,2 minggu lalu,"Review text here...",https://lh3.googleusercontent.com/...
@@ -98,37 +136,53 @@ ayu nurcahya,3.0,sebulan lalu,"Another review...",https://lh3.googleusercontent.
 ## Struktur Kode
 
 ### File Structure
+
 - run.py: Main entry point untuk menjalankan scraper
 - src/models.py: Review dataclass untuk struktur data
 - src/scraper.py: Main GMapReviewScraper class dengan OOP approach
 - src/writer.py: ReviewWriter class untuk CSV operations
 - src/utils.py: Helper functions untuk text/attribute extraction
-- src/__init__.py: Package initialization
+- src/**init**.py: Package initialization
 
 ### Core Classes
+
 - GMapReviewScraper: Main scraper class dengan OOP approach
 - Review: Dataclass untuk struktur data review
 - ReviewWriter: Class untuk menulis data ke CSV
 
 ### Key Methods
+
 - scrape(): Main method untuk memulai scraping
-- _scroll_and_collect_reviews(): Auto-scroll dengan real-time saving
-- _get_author_image_url(): Extract image URL dari review container
+- \_scroll_and_collect_reviews(): Auto-scroll dengan real-time saving
+- \_manual_scroll_and_collect_reviews(): Manual mode dengan interactive menu
+- \_hybrid_scroll_and_collect_reviews(): Hybrid mode auto-scroll + manual scrape
+- \_get_author_image_url(): Extract image URL dari review container
 - append_to_csv(): Real-time CSV writing
 
 ## Fitur Teknis
 
+### Multiple Scroll Strategies
+
+- Auto Mode: Full automation dengan real-time saving
+- Manual Mode: User control dengan interactive menu
+- Hybrid Mode: Auto-scroll untuk loading + manual confirmation
+- Smart stopping: Deteksi kapan review habis berdasarkan count dan height
+
 ### Auto-scroll Strategy
-- Scroll review panel secara otomatis
-- Real-time parsing dan saving
-- Stop condition: max reviews, no new content, max scrolls
+
+- Scroll review panel secara otomatis setiap 3 detik
+- Review count checking setiap 10 scroll untuk efisiensi
+- Stop condition: max reviews tercapai, tidak ada review baru, atau max scrolls
+- Real-time parsing dan saving ke CSV
 
 ### Image URL Extraction
+
 - Multiple CSS selectors untuk robustness
 - Fallback strategies untuk berbagai UI
 - Validasi URL Googleusercontent
 
 ### Error Handling
+
 - Multiple strategies untuk buka review panel
 - Stale element handling
 - Network timeout management
@@ -164,13 +218,18 @@ scrap_ulasan_gmap/
 ## Troubleshooting
 
 ### Common Issues
+
 1. Chrome not found: Install Google Chrome
 2. Connection timeout: Check internet connection
 3. No reviews found: Verify URL is a valid Google Maps place
 4. Image URL empty: UI might have changed, check selectors
+5. Scroll mode not working: Check AUTO_SCROLL value (true/false/hybrid)
+6. Manual mode stuck: Make sure to scroll browser manually before pressing "1"
 
 ### Debug Mode
+
 Set HEADLESS=false di .env untuk melihat browser automation.
+Gunakan AUTO_SCROLL=false untuk kontrol manual dan debug.
 
 ## Performance
 
