@@ -17,11 +17,12 @@ from utils import safe_get_text, safe_get_attr, extract_rating, get_author_image
 class GMapReviewScraper:
     """Main class untuk scraping review Google Maps"""
     
-    def __init__(self, place_url: str, headless: bool = True, max_reviews: int = 100, output_filename: str = "reviews.csv"):
+    def __init__(self, place_url: str, headless: bool = True, max_reviews: int = 100, output_filename: str = "reviews.csv", auto_scroll: str = "true"):
         self.place_url = place_url
         self.headless = headless
         self.max_reviews = max_reviews
         self.output_filename = output_filename
+        self.auto_scroll = auto_scroll.lower().strip()  # "true", "false", or "hybrid"
         self.driver: Optional[webdriver.Chrome] = None
         self.wait: Optional[WebDriverWait] = None
 
@@ -83,7 +84,6 @@ class GMapReviewScraper:
         review_container_selectors = [
             'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde',
             'div[role="region"] div[aria-label][jscontroller]',
-            'div[jscontroller][data-review-id]',
             'div[role="region"]',
             'div[aria-label*="reviews" i]'
         ]
@@ -505,6 +505,378 @@ class GMapReviewScraper:
         
         return all_reviews
 
+    def _manual_scroll_and_collect_reviews(self) -> List[Review]:
+        """Manual scroll mode with interactive menu"""
+        assert self.driver and self.wait
+        print("\nManual Scroll Mode Activated!")
+        print("You can manually scroll the page to load more reviews")
+        print("When you're ready to scrape, come back to this terminal\n")
+        
+        # Try multiple selectors for the scrollable container
+        scrollable_selectors = [
+            'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde',
+            'div[role="region"] div[aria-label][jscontroller]',
+            'div[role="region"]',
+            'div[aria-label*="reviews" i]',
+            'div.bJzME.tTVLSc',
+            'div[jscontroller]'
+        ]
+        
+        scrollable = None
+        for selector in scrollable_selectors:
+            try:
+                scrollable = self.driver.find_element(By.CSS_SELECTOR, selector)
+                print(f"Found scrollable container with selector: {selector}")
+                break
+            except NoSuchElementException:
+                continue
+        
+        if scrollable is None:
+            print("Could not find scrollable container, using page scroll instead...")
+
+        # Initialize CSV writer for real-time saving
+        writer = ReviewWriter(output_dir="data", output_filename=self.output_filename)
+        all_reviews = []
+        processed_review_ids = set()
+        
+        while True:
+            print("\n" + "="*60)
+            print("MANUAL SCRAPING MENU")
+            print("="*60)
+            
+            # Parse and show current reviews count
+            current_reviews = self._parse_reviews_on_page()
+            print(f"Reviews currently visible on page: {len(current_reviews)}")
+            print(f"Total reviews scraped so far: {len(all_reviews)}")
+            print(f"Target max reviews: {self.max_reviews}")
+            
+            print("\nOptions:")
+            print("1. Start scraping current reviews")
+            print("2. Exit scraping")
+            print("\nTip: Scroll the browser window manually to load more reviews before choosing option 1")
+            
+            while True:
+                try:
+                    choice = input("\nEnter your choice (1 or 2): ").strip()
+                    if choice in ['1', '2']:
+                        break
+                    else:
+                        print("Invalid choice! Please enter 1 or 2.")
+                except KeyboardInterrupt:
+                    print("\n\nScraping interrupted by user")
+                    return all_reviews
+            
+            if choice == '2':
+                print("Exiting scraping...")
+                break
+            elif choice == '1':
+                print("\nStarting to scrape reviews...")
+                
+                # Parse and collect new reviews from current page
+                new_reviews = self._parse_reviews_on_page()
+                
+                # Add only new reviews that haven't been processed
+                new_reviews_added = []
+                for review in new_reviews:
+                    review_id = f"{review.author_name}_{review.published_at}_{review.rating}"
+                    if review_id not in processed_review_ids:
+                        all_reviews.append(review)
+                        new_reviews_added.append(review)
+                        processed_review_ids.add(review_id)
+                        print(f"Added new review: {review.author_name} - {review.rating} stars - {review.published_at}")
+                
+                # Save new reviews to CSV immediately
+                if new_reviews_added:
+                    writer.append_to_csv(new_reviews_added)
+                    print(f"Saved {len(new_reviews_added)} new reviews to CSV")
+                else:
+                    print("No new reviews found (all reviews already scraped)")
+                
+                print(f"Total reviews collected so far: {len(all_reviews)}")
+                
+                # Check if we've reached the limit
+                if len(all_reviews) >= self.max_reviews:
+                    print(f"Reached max reviews limit ({self.max_reviews}), stopping...")
+                    break
+                
+                # Ask if user wants to continue
+                print("\n" + "-"*40)
+                continue_choice = input("Continue scraping? (y/n): ").strip().lower()
+                if continue_choice not in ['y', 'yes']:
+                    break
+        
+        return all_reviews
+
+    def _hybrid_scroll_and_collect_reviews(self) -> List[Review]:
+        """Hybrid mode: Auto scroll to load reviews, then manual scraping"""
+        assert self.driver and self.wait
+        print("\nHybrid Mode Activated!")
+        print("First, we'll auto-scroll to load all reviews...")
+        print("This may take a while depending on the number of reviews\n")
+        
+        # Try multiple selectors for the scrollable container
+        scrollable_selectors = [
+            'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde',
+            'div[role="region"] div[aria-label][jscontroller]',
+            'div[role="region"]',
+            'div[aria-label*="reviews" i]',
+            'div.bJzME.tTVLSc',
+            'div[jscontroller]'
+        ]
+        
+        scrollable = None
+        for selector in scrollable_selectors:
+            try:
+                scrollable = self.driver.find_element(By.CSS_SELECTOR, selector)
+                print(f"Found scrollable container with selector: {selector}")
+                break
+            except NoSuchElementException:
+                continue
+        
+        if scrollable is None:
+            print("Could not find scrollable container, using page scroll instead...")
+            return self._hybrid_scroll_page_and_collect_reviews()
+
+        # Phase 1: Auto-scroll to load all reviews
+        print("Phase 1: Auto-scrolling to load all reviews...")
+        last_height = 0
+        same_height_counter = 0
+        scroll_count = 0
+        max_scrolls = 1000  # Increase max scrolls significantly for hybrid mode
+        last_review_count = 0
+        same_review_count_counter = 0
+        
+        while scroll_count < max_scrolls:
+            # Scroll to bottom of the container first
+            self.driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight;", scrollable)
+            time.sleep(3)  # Longer wait for content to load
+            
+            new_height = self.driver.execute_script("return arguments[0].scrollHeight;", scrollable)
+            scroll_count += 1
+            
+            # Only check reviews count every 10 scrolls (or at the end)
+            if scroll_count % 10 == 0 or scroll_count == 1:
+                current_reviews = self._parse_reviews_on_page()
+                current_count = len(current_reviews)
+                print(f"Scroll {scroll_count}: Found {current_count} reviews on page")
+                
+                # Check if review count hasn't increased
+                if current_count == last_review_count:
+                    same_review_count_counter += 1
+                    print(f"Review count unchanged for {same_review_count_counter * 10} scrolls")
+                else:
+                    same_review_count_counter = 0
+                    print(f"Added {current_count - last_review_count} new reviews")
+                
+                last_review_count = current_count
+                
+                # Stop if we've reached the target number of reviews
+                if current_count >= self.max_reviews:
+                    print(f"Reached target of {self.max_reviews} reviews! (Found: {current_count})")
+                    break
+                    
+                # Stop if review count hasn't changed for 30 scrolls (3 checks)
+                if same_review_count_counter >= 3:
+                    print(f"Review count unchanged for {same_review_count_counter * 10} scrolls. Likely reached the end.")
+                    break
+            else:
+                # Just show scroll progress without counting reviews
+                print(f"Scroll {scroll_count}...")
+            
+            if new_height == last_height:
+                same_height_counter += 1
+                if scroll_count % 10 == 0:  # Only show height info every 10 scrolls
+                    print(f"Height unchanged: {new_height} (count: {same_height_counter})")
+            else:
+                same_height_counter = 0
+                if scroll_count % 10 == 0:
+                    print(f"New height: {new_height}")
+            
+            last_height = new_height
+
+            # Stop if we've reached the end (same height 10 times in a row for more certainty)
+            if same_height_counter >= 10:
+                # Check final count before stopping
+                final_count_reviews = self._parse_reviews_on_page()
+                print(f"Reached end of scrollable content (height unchanged for 10 scrolls)")
+                print(f"Final count at scroll {scroll_count}: {len(final_count_reviews)} reviews")
+                break
+        
+        # Show final results of scrolling phase
+        final_reviews = self._parse_reviews_on_page()
+        print("\nScrolling completed!")
+        print(f"Total reviews loaded: {len(final_reviews)}")
+        print(f"Target was: {self.max_reviews}")
+        print(f"Total scrolls performed: {scroll_count}")
+        
+        # Phase 2: Manual confirmation and scraping
+        print("\n" + "="*60)
+        print("Phase 2: Ready to scrape!")
+        print("="*60)
+        
+        # Initialize CSV writer for saving
+        writer = ReviewWriter(output_dir="data", output_filename=self.output_filename)
+        
+        while True:
+            print(f"Reviews ready to scrape: {len(final_reviews)}")
+            print(f"Target max reviews: {self.max_reviews}")
+            
+            print("\nOptions:")
+            print("1. Start scraping all loaded reviews")
+            print("2. Exit without scraping")
+            
+            while True:
+                try:
+                    choice = input("\nEnter your choice (1 or 2): ").strip()
+                    if choice in ['1', '2']:
+                        break
+                    else:
+                        print("Invalid choice! Please enter 1 or 2.")
+                except KeyboardInterrupt:
+                    print("\n\nScraping interrupted by user")
+                    return []
+            
+            if choice == '2':
+                print("Exiting without scraping...")
+                return []
+            elif choice == '1':
+                print("\n🔄 Starting to scrape all reviews...")
+                
+                # Parse and collect all reviews from current page
+                all_reviews = self._parse_reviews_on_page()
+                
+                # Limit to max_reviews if specified
+                if len(all_reviews) > self.max_reviews:
+                    all_reviews = all_reviews[:self.max_reviews]
+                    print(f"📊 Limited to {self.max_reviews} reviews as specified in MAX_REVIEWS")
+                
+                # Process and save reviews like manual mode
+                processed_reviews = []
+                processed_review_ids = set()
+                
+                for i, review in enumerate(all_reviews, 1):
+                    review_id = f"{review.author_name}_{review.published_at}_{review.rating}"
+                    if review_id not in processed_review_ids:
+                        processed_reviews.append(review)
+                        processed_review_ids.add(review_id)
+                        print(f"➕ [{i}/{len(all_reviews)}] {review.author_name} - {review.rating} stars - {review.published_at}")
+                
+                # Save all reviews to CSV using append method like manual mode
+                if processed_reviews:
+                    writer.append_to_csv(processed_reviews)
+                    print(f"💾 Saved {len(processed_reviews)} reviews to CSV")
+                
+                print(f"✅ Scraping completed! Total: {len(processed_reviews)} reviews")
+                return processed_reviews
+        
+        return []
+
+    def _hybrid_scroll_page_and_collect_reviews(self) -> List[Review]:
+        """Hybrid mode fallback: Auto scroll entire page, then manual scraping"""
+        print("Hybrid mode: Auto-scrolling entire page...")
+        
+        last_height = self.driver.execute_script("return document.body.scrollHeight")
+        scroll_count = 0
+        max_scrolls = 1000
+        same_height_counter = 0
+        last_review_count = 0
+        same_review_count_counter = 0
+        
+        # Phase 1: Auto-scroll the page
+        while scroll_count < max_scrolls:
+            # Scroll first
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(3)
+            
+            new_height = self.driver.execute_script("return document.body.scrollHeight")
+            scroll_count += 1
+            
+            # Only check reviews count every 10 scrolls (or at the first and end)
+            if scroll_count % 10 == 0 or scroll_count == 1:
+                current_reviews = self._parse_reviews_on_page()
+                current_review_count = len(current_reviews)
+                print(f"Page scroll {scroll_count}: Found {current_review_count} reviews")
+                
+                # Check if review count hasn't changed
+                if current_review_count == last_review_count:
+                    same_review_count_counter += 1
+                    print(f"Review count unchanged for {same_review_count_counter * 10} scrolls")
+                else:
+                    same_review_count_counter = 0
+                    print(f"Found {current_review_count - last_review_count} new reviews")
+                
+                last_review_count = current_review_count
+                
+                # Stop if we've reached the target number of reviews
+                if current_review_count >= self.max_reviews:
+                    print(f"Reached target of {self.max_reviews} reviews! (Found: {current_review_count})")
+                    break
+                    
+                # Stop if review count hasn't changed for 30 scrolls (3 checks)
+                if same_review_count_counter >= 3:
+                    print(f"No new reviews found in last {same_review_count_counter * 10} scrolls, stopping...")
+                    break
+            else:
+                print(f"Page scroll {scroll_count}...")
+            
+            if new_height == last_height:
+                same_height_counter += 1
+            else:
+                same_height_counter = 0
+            
+            last_height = new_height
+            
+            # Stop if we've reached the end (page height unchanged)
+            if same_height_counter >= 5:
+                # Check final count before stopping
+                final_count_reviews = self._parse_reviews_on_page()
+                print(f"Reached end of page")
+                print(f"Final count at scroll {scroll_count}: {len(final_count_reviews)} reviews")
+                break
+        
+        # Phase 2: Manual confirmation (same as container version)
+        final_reviews = self._parse_reviews_on_page()
+        print(f"\nScrolling completed!")
+        print(f"Total reviews loaded: {len(final_reviews)}")
+        
+        writer = ReviewWriter(output_dir="data", output_filename=self.output_filename)
+        
+        while True:
+            print(f"\n📋 Reviews ready to scrape: {len(final_reviews)}")
+            print("\nOptions:")
+            print("1️⃣  Start scraping all loaded reviews")
+            print("2️⃣  Exit without scraping")
+            
+            choice = input("\n🔢 Enter your choice (1 or 2): ").strip()
+            
+            if choice == '2':
+                print("👋 Exiting without scraping...")
+                return []
+            elif choice == '1':
+                print("\n🔄 Starting to scrape all reviews...")
+                all_reviews = self._parse_reviews_on_page()
+                if len(all_reviews) > self.max_reviews:
+                    all_reviews = all_reviews[:self.max_reviews]
+                    print(f"📊 Limited to {self.max_reviews} reviews as specified in MAX_REVIEWS")
+                
+                processed_reviews = []
+                processed_review_ids = set()
+                
+                for i, review in enumerate(all_reviews, 1):
+                    review_id = f"{review.author_name}_{review.published_at}_{review.rating}"
+                    if review_id not in processed_review_ids:
+                        processed_reviews.append(review)
+                        processed_review_ids.add(review_id)
+                        print(f"➕ [{i}/{len(all_reviews)}] {review.author_name} - {review.rating} stars - {review.published_at}")
+                
+                if processed_reviews:
+                    writer.append_to_csv(processed_reviews)
+                    print(f"💾 Saved {len(processed_reviews)} reviews to CSV")
+                
+                return processed_reviews
+        
+        return []
+
     def scrape(self) -> List[Review]:
         """Main method to start scraping"""
         self._init_driver()
@@ -531,13 +903,35 @@ class GMapReviewScraper:
             try:
                 self._open_reviews_panel()
                 print("Reviews panel opened successfully!")
-                reviews = self._scroll_and_collect_reviews()
+                
+                # Check auto scroll mode
+                if self.auto_scroll == "true":
+                    print("Auto scroll mode enabled")
+                    reviews = self._scroll_and_collect_reviews()
+                elif self.auto_scroll == "false":
+                    print("Manual scroll mode enabled")
+                    reviews = self._manual_scroll_and_collect_reviews()
+                elif self.auto_scroll == "hybrid":
+                    print("Hybrid scroll mode enabled")
+                    reviews = self._hybrid_scroll_and_collect_reviews()
+                else:
+                    # Default to auto scroll for backward compatibility
+                    print("Auto scroll mode enabled (default)")
+                    reviews = self._scroll_and_collect_reviews()
+                    
             except Exception as e:
                 print(f"Could not open reviews panel: {e}")
-                print("Trying to scroll the main page instead...")
-                reviews = self._scroll_page_and_collect_reviews()
+                if self.auto_scroll == "true" or self.auto_scroll not in ["true", "false", "hybrid"]:
+                    print("Trying to scroll the main page instead...")
+                    reviews = self._scroll_page_and_collect_reviews()
+                elif self.auto_scroll == "false":
+                    print("Manual mode: Please scroll the page manually to load more reviews")
+                    reviews = self._manual_scroll_and_collect_reviews()
+                elif self.auto_scroll == "hybrid":
+                    print("Hybrid mode: Auto-scrolling the main page instead...")
+                    reviews = self._hybrid_scroll_page_and_collect_reviews()
             
             return reviews
         finally:
             if self.driver:
-                self.driver.quit() 
+                self.driver.quit()
